@@ -23,7 +23,21 @@ import time
 def main():
 
 	def process_str(row):
+		"""
+		Parameters
+		----------
+		Row: string:
+		  Row of dataframe that contains a string doc
 
+		Returns
+		----------
+		List of strings:
+		A stemmed list of words with common stopwords removed
+
+		Notes: function must be declared in main function because it utilizes Spark broadcast variables.
+		If there is an error when process the row, then the return is a list with '' as the only
+		item and an error is printed.
+		"""
 		body_list = []
 		try:
 			for word in row.lower().split(): 
@@ -34,12 +48,26 @@ def main():
 		except Exception as e:
 			print(e)
 			return ['']
+
+	# Declaring broadcast variables/functions to optimize performance.
+	stemmer = sc.broadcast(PorterStemmer())
+	strip_chars = ".?,!;:\"'()" 
+	rgx = sc.broadcast(re.compile('[%s]' % strip_chars))
+
+	# Creates a udf
+	process = udf(process_str, ArrayType(StringType()))
 		
-	repartition_num = 1000
+	# Creation of Spark Context and Session
 	sc = SparkContext()
 	spark = SparkSession.builder.appName("SimpleApp").getOrCreate()
 	print('*'*60, '\n', sc.getConf().getAll(), '\n', '*'*60, '\n')
 
+	# Because dataframe is so large it must be repartitioned to utilize all nodes in the network.
+	# 
+	repartition_num = 1000
+
+	# This s3 path contains all of the amazon reviews in all categories. Spark will
+	# automatically iterate through all files in the 'tsv' folder. It then
 	data = sc.textFile('s3://amazon-reviews-pds/tsv/')
 	df = spark.read.csv(data, sep="\t", header=True, inferSchema=True)
 	df = df.repartition(repartition_num)
@@ -49,11 +77,7 @@ def main():
 	for word in ['', 1, 2, 3, 4, 5]:
 		stop_words.add(word)
 
-	stemmer = sc.broadcast(PorterStemmer())
-	strip_chars = ".?,!;:\"'()" 
-	rgx = sc.broadcast(re.compile('[%s]' % strip_chars) )
 
-	process = udf(process_str, ArrayType(StringType()))
 
 	df_new = df.withColumn('body_list', process(df['review_body']))\
 			.select('star_rating', 'body_list')
