@@ -1,110 +1,88 @@
-import nltk
-nltk.download('stopwords')
 from pyspark.sql import SparkSession, SQLContext
-from pyspark.sql.functions import udf
+from pyspark.sql.functions import udf, concat, col, lit
 from pyspark.ml.classification import RandomForestClassifier
-from pyspark.ml.feature import CountVectorizer, IDF
-from pyspark.ml import Pipeline
-from pyspark.sql.types import ArrayType, FloatType, StringType
-from nltk.stem.porter import PorterStemmer
+from pyspark.ml.feature import CountVectorizer
+from pyspark.sql.types import ArrayType, FloatType, StringType, IntegerType
 from pyspark import SparkConf, SparkContext
-import nltk
-from nltk.tokenize import sent_tokenize
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from nltk.stem.porter import PorterStemmer
+
 import sys
 from collections import defaultdict
 import numpy as np
 import re
 import time
-
+import pickle
 
 def main():
+	sc = SparkContext()
+	spark = SparkSession.builder.appName("SimpleApp").getOrCreate()
+	print('*'*60, '\n', sc.getConf().getAll(), '\n', '*'*60, '\n') #Prints configuration at start of run on EMR
+		
+	strip_chars = ".?,!;:\"'()#&"
+	rgx = sc.broadcast(re.compile('[%s]' % strip_chars))
 
 	def process_str(row):
+		"""
+		Input: text row from dataframe
+		Output: list of words with punctuation removed
 
+		Note that this must be declared in main for proper function
+		"""
 		body_list = []
 		try:
 			for word in row.lower().split(): 
-				word = rgx.value.sub('', word) 
-				if word not in stop_words_broadcast.value: 
-					body_list.append(stemmer.value.stem(word))
+				word = rgx.value.sub('', word)  
+				body_list.append(word)
 			return body_list
 		except Exception as e:
 			print(e)
+			print(row)
 			return ['']
-		
-	repartition_num = 1000
-	sc = SparkContext()
-	spark = SparkSession.builder.appName("SimpleApp").getOrCreate()
-	print('*'*60, '\n', sc.getConf().getAll(), '\n', '*'*60, '\n')
 
-	data = sc.textFile('s3://amazon-reviews-pds/tsv/')
-	df = spark.read.csv(data, sep="\t", header=True, inferSchema=True)
-	df = df.repartition(repartition_num)
-
-	# removes punctuation, adds column 'body_list' which is a list of words, and selects only the star_rating and body_list columns
-	stop_words = set(stopwords.words('english'))
-	for word in ['', 1, 2, 3, 4, 5]:
-		stop_words.add(word)
-
-	stemmer = sc.broadcast(PorterStemmer())
-	strip_chars = ".?,!;:\"'()" 
-	rgx = sc.broadcast(re.compile('[%s]' % strip_chars) )
-
+	#Declaration of 'user defined function' so nodes can use them
 	process = udf(process_str, ArrayType(StringType()))
+	good_bad = udf(good_bad_filter, IntegerType())
 
-	df_new = df.withColumn('body_list', process(df['review_body']))\
-			.select('star_rating', 'body_list')
+	#Directory of reviews: s3://amazon-reviews-pds/tsv/
+	#The use of wildcards (*_us_*.gz) allows spark to load all but the non-english reviews
+	full_df = spark.read.csv('s3://amazon-reviews-pds/tsv/*_us_*.gz', sep="\t", header=True, inferSchema=True)
 
-	print("-"*30, '\nFinished creating new_df\n', "-"*30)
-	print(df_new.count())
+	#Repartitioning the Dataframe allows each task to be split to the workers
+	repartition_num = 1000
+	full_df = full_df.repartition(repartition_num)
 
-	cv = CountVectorizer(inputCol="body_list", outputCol="features")
-	print("created cv line 67")
-	idf = IDF(inputCol='features', outputCol = 'idf_features')
-	print("created idf line 69")
-	#rf = RandomForestClassifier(labelCol='star_rating', featuresCol='idf_features', seed=100)
-	print("created rf line 71")
+	#Filters out 3 star ratings, and only keeps the review_headline, review_body, and star_rating columns
+	#The good_bad function makes 4 and above become 1 (positive review), and 2 and below become 0 (negative review)
+	filtered_df = full_df.select('review_headline', 'review_body', 'star_rating')\
+	   .filter(full_df.star_rating != 3)\
+			.withColumn('star_rating', good_bad('star_rating'))
 
-	print('started countvectorizer on line 73')
-	# Stage one in pipeline the words are separated into count vectors
-	stage1_fit = cv.fit(df_new)
-	stage1_transform = stage1_fit.transform(df_new)
-	stage1_transform.repartition(repartition_num)
-	print('*'*40 + "Head of file:")
-	print(df.head())
-	print('*'*40 + "Head of processed:")
-	print(stage1_transform.take(5))
-	print('*'*40+"end of script")
+	#Concatinates the review_headline and review_body columns and renames the column 'text'
+	two_col_df = filtered_df.select(concat(col('review_headline'), lit(' '), col('review_body')).alias('text'), filtered_df.star_rating)
 
-	#Stage two in pipeline for tf-IDF
-	stage2_fit = idf.fit(stage1_transform)
-	stage2_transform = stage2_fit.transform(stage1_transform)
-	
-	print('*'*40+'\n', stage2_transform.select('star_rating', 'idf_features').take(1), '\n'+'*'*40)
-	print('*'*40+'\n', stage2_transform.select('star_rating', 'idf_features').count(), '\n'+'*'*40)
-	print('*'*14 + 'END OF SCRIPT'+'*'*14)
+	#Turns string into a list of words with the punctuation removed
+	text_list_df = two_col_df.withColumn('text_list', process(two_col_df['text']))\
+		.select('text_list', 'star_rating')
 
-	# Stage three in pipeline for random forest
-	'''stage3_fit = rf.fit(stage2_transform)
-	stage3_transform = stage3_fit.transform(stage2_transform)
-	print("-"*30, '\nFinished stage 3\n', "-"*30)
+	#Fitting and transforming the dataset into a count vectorized form
+	cv = CountVectorizer(inputCol="text_list", outputCol="count_vec", minDF=1000)
+	cv_fit = cv.fit(text_list_df) #need to save vocabulary from this
+	cv_transform = cv_fit.transform(text_list_df)
+	output_df = cv_transform.select(cv_transform.count_vec, cv_transform.star_rating)
 
-	def print_top_features(model, n=10):
+	#Saves the vocabulary and processed dataframe to S3 in JSON format
+	vocab = spark.createDataFrame(cv_fit.vocabulary, schema=StringType())
+	vocab.coalesce(1).write.format('json').save('s3://dsi-amazon-neural/vocab') #saves vocabulary as a json
+	output_df.write.format('json').save('s3://dsi-amazon-neural/') #saves final dataframe in a series of json files on s3
+
+def good_bad_filter(x):
 	"""
-	Input: RandomForest model, number of top feature words to print.
-	Output: None. Prints top n words to console.
-	"""
-	sorted_indices = np.argsort(model.featureImportances.toArray())[-1:-(n+1):-1]
-	for i in range(n):
-			print(stage1_fit.vocabulary[sorted_indices[i]])
-	print_top_features(stage3_fit)'''
+	Input: integer
+	Output: integer
 
-	"""pd = stage3_transform.select('star_rating', 'idf_features').toPandas()
-	pd.to_pickle('idf_pandas')
-	print("-"*30, '\nsaved pandas to a pickle file\n', "-"*30)"""
+	Changes from a multistar rating system to good (1) or bad (0)
+	"""
+	if x >=4: return 1
+	else: return 0
 
 if __name__ == "__main__":
-    main()
+	main()
