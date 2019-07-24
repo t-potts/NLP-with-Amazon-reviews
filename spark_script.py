@@ -72,7 +72,7 @@ def main():
 	#Saves the vocabulary and processed dataframe to S3 in JSON format
 	vocab = spark.createDataFrame(cv_fit.vocabulary, schema=StringType())
 	vocab.coalesce(1).write.format('json').save('s3://dsi-amazon-neural/vocab') #saves vocabulary as a json
-	output_df.write.format('json').save('s3://dsi-amazon-neural/') #saves final dataframe in a series of json files on s3
+	output_df.write.format('json').save('s3://dsi-amazon-neural/jsonfiles') #saves final dataframe in a series of json files on s3
 
 def good_bad_filter(x):
 	"""
