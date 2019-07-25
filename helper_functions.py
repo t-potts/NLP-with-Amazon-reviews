@@ -37,13 +37,6 @@ def import_data(json_path):
 
         #Replaces the indices of row i in the dense_matrix with the values
         np.put(dense_matrix[i, :], indices, values)
-
-    #Creates a one-hot encoded good/bad star rating matrix
-    y_one_dimensional = np.array(star_rating_list)
-    y_array = np.zeros([y_one_dimensional.shape[0], 2])
-    y_array[:, 0] = y_one_dimensional
-    y_array[:, 1] = y_array[:, 1] + 1
-    y_array[:, 1] = y_array[:, 1] - y_array[:, 0]
     
-    return dense_matrix, y_array
+    return dense_matrix, np.array(star_rating_list)
 
