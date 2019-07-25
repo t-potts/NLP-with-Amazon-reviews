@@ -44,8 +44,9 @@ def main():
 
 	#Directory of reviews: s3://amazon-reviews-pds/tsv/
 	#The use of wildcards (*_us_*.gz) allows spark to load all but the non-english reviews
-	full_df = spark.read.csv('s3://amazon-reviews-pds/tsv/*_us_*.gz', sep="\t", header=True, inferSchema=True)
-
+	#full_df = spark.read.csv('s3://amazon-reviews-pds/tsv/*_us_*.gz', sep="\t", header=True, inferSchema=True)
+	full_df = spark.read.csv('s3://amazon-reviews-pds/tsv/amazon_reviews_us_Video_DVD_v1_00.tsv.gz', sep="\t", header=True, inferSchema=True)
+	
 	#Repartitioning the Dataframe allows each task to be split to the workers
 	repartition_num = 1000
 	full_df = full_df.repartition(repartition_num)
@@ -71,8 +72,10 @@ def main():
 
 	#Saves the vocabulary and processed dataframe to S3 in JSON format
 	vocab = spark.createDataFrame(cv_fit.vocabulary, schema=StringType())
-	vocab.coalesce(1).write.format('json').save('s3://dsi-amazon-neural/vocab') #saves vocabulary as a json
-	output_df.write.format('json').save('s3://dsi-amazon-neural/jsonfiles') #saves final dataframe in a series of json files on s3
+	#vocab.coalesce(1).write.format('json').save('s3://dsi-amazon-neural/vocab') #saves vocabulary as a json
+	vocab.coalesce(1).write.mode("overwrite").json('s3://dsi-amazon-neural/vocab')
+	#output_df.write.format('json').save('s3://dsi-amazon-neural/jsonfiles') #saves final dataframe in a series of json files on s3
+	output_df.write.mode("overwrite").json('s3://dsi-amazon-neural/jsonfiles')
 
 def good_bad_filter(x):
 	"""
