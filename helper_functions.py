@@ -43,7 +43,7 @@ def import_data(json_path):
     y_array = np.zeros([y_one_dimensional.shape[0], 2])
     y_array[:, 0] = y_one_dimensional
     y_array[:, 1] = y_array[:, 1] + 1
-    y_array[:, 1] = y_array[:, 1] - new_y[:, 0]
+    y_array[:, 1] = y_array[:, 1] - y_array[:, 0]
     
     return dense_matrix, y_array
 
