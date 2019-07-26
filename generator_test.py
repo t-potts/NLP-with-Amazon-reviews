@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 import json
 from sklearn.metrics import confusion_matrix
 from os import listdir
-import seaborn as sn
+
 
 def import_data(json_directory, num_rows):
     """
-    Parameter: String
+    Parameter: String, num_rows
     Output: 2 Numpy arrays
     
-    Reads json from path 'json_path' that has multiple rows of dense matrix and a star rating.
+    Reads jsons in path 'json_directorry' that has multiple rows of dense matrix and a star rating.
     Processes the file, creates a dense matrix.
     Returns the dense matrix and star rating matrix
     """
@@ -27,7 +27,7 @@ def import_data(json_directory, num_rows):
     while 1:
         
         vocab_size_saved = False
-        with open(json_paths[path_shuffle[file_count]], 'r') as f:
+        with open(json_directory + '/' + json_paths[path_shuffle[file_count]], 'r') as f:
             for line in f:
                 #creates separate lists for sparse vec data, and star review
                 if json.loads(line)['star_rating'] == 1:
@@ -51,29 +51,49 @@ def import_data(json_directory, num_rows):
                     num_positive, num_negative = 0, 0
                     #creates an empty matrix of the size to fit the read in data
                     #adds an extra column to hold positive/negative value
-                    dense_matrix = np.zeros([num_rows, num_matrix_columns + 1])          
+                    dense_matrix = np.zeros((num_rows, num_matrix_columns + 1))
+
+                    #randomizes positive indexs
+                    positive_shuffle_idx = np.arange(len(count_vec_list_positive))
+                    np.random.shuffle(positive_shuffle_idx)
 
                     #loops through positive reviews to create dense matrix
-                    for i, row in enumerate(count_vec_list_positive):
+                    for i in range(len(count_vec_list_positive)):
+                        
+                        #Breaks loop if half the matrix is filled
+                        if i == num_rows / 2: break
+                        
+                        #selects a random row and gets the indices and values
+                        row = count_vec_list_positive[positive_shuffle_idx[i]]
                         indices = row['indices']
                         values = row['values']
-
+                        
                         #Replaces the indices of row i in the dense_matrix with the values
                         np.put(dense_matrix[i, :], indices, values)
 
                         #sets last column to indicate positive
                         dense_matrix[i, -1] = 1
 
+                    #randomizes negative indexs
+                    negative_shuffle_idx = np.arange(len(count_vec_list_positive))
+                    np.random.shuffle(negative_shuffle_idx)
+
                     #loops through negative reviews to create dense matrix
-                    for i, row in enumerate(count_vec_list_positive):
+                    for i in range(len(count_vec_list_negative)):
+                        #Breaks loop if the matrix is filled
+                        if i == num_rows / 2: break  
+                        
+                        #selects a random row and gets the indices and values
+                        row = count_vec_list_positive[negative_shuffle_idx[i]]
                         indices = row['indices']
                         values = row['values']
 
                         #Replaces the indices of row i in the dense_matrix with the values
-                        np.put(dense_matrix[i + (num_rows / 2), :], indices, values)
+                        row_idx = int(i + num_rows / 2)
+                        np.put(dense_matrix[row_idx, :], indices, values)
 
                         #sets last column to indicate negative
-                        dense_matrix[i + (num_rows / 2), -1] = 0
+                        dense_matrix[int(i + num_rows / 2), -1] = 0
                     
                     #Creates an array of randomized indexs with lengh equal to number of dense_matrix rows
                     shuffle_dense_indexs = np.arange(dense_matrix.shape[0])
@@ -93,4 +113,7 @@ def import_data(json_directory, num_rows):
                 file_count = 0
                 np.random.shuffle(path_shuffle)
 
-import_data('jsons_full', 250)
+for X_, y_ in import_data('jsons', 250):
+    print(X_.shape[0])
+    print(y_.shape[0])
+    break
