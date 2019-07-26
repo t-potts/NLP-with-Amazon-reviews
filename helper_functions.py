@@ -79,7 +79,7 @@ def import_data(json_path):
     return dense_matrix, np.array(star_rating_list)
 
 
-def batch_generator(file_dir, batch_size):
+def batch_generator(file_dir, batch_size, samples_per_epoch):
     #creates list of filename strings from jsons directory
     dir_list = listdir('jsons')
     
