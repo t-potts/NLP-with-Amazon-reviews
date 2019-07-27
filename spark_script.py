@@ -17,7 +17,7 @@ def main():
 	spark = SparkSession.builder.appName("SimpleApp").getOrCreate()
 	print('*'*60, '\n', sc.getConf().getAll(), '\n', '*'*60, '\n') #Prints configuration at start of run on EMR
 		
-	strip_chars = ".?,!;:\"'()#&"
+	strip_chars = ".?,!;:\"/>\\'()#&"
 	rgx = sc.broadcast(re.compile('[%s]' % strip_chars))
 
 	def process_str(row):
@@ -44,16 +44,16 @@ def main():
 
 	#Directory of reviews: s3://amazon-reviews-pds/tsv/
 	#The use of wildcards (*_us_*.gz) allows spark to load all but the non-english reviews
-	#full_df = spark.read.csv('s3://amazon-reviews-pds/tsv/*_us_*.gz', sep="\t", header=True, inferSchema=True)
+	full_df_in = spark.read.csv('s3://amazon-reviews-pds/tsv/*_us_*.gz', sep="\t", header=True, inferSchema=True)
+	full_df = full_df_in.limit(1000)
+	#full_df = spark.read.csv('s3://amazon-reviews-pds/tsv/amazon_reviews_us_Video_v1_00.tsv.gz', sep="\t", header=True, inferSchema=True)
 	
-	full_df = spark.read.csv('s3://amazon-reviews-pds/tsv/amazon_reviews_us_Video_v1_00.tsv.gz', sep="\t", header=True, inferSchema=True)
-
 	
 	#Uncomment the below line and comment the above to only process a subset of the data
 	#full_df = spark.read.csv('s3://amazon-reviews-pds/tsv/amazon_reviews_us_Video_DVD_v1_00.tsv.gz', sep="\t", header=True, inferSchema=True)
 	
 	#Repartitioning the Dataframe allows each task to be split to the workers
-	repartition_num = 1000
+	repartition_num = 10000
 	full_df = full_df.repartition(repartition_num)
 
 	#Filters out 3 star ratings, and only keeps the review_headline, review_body, and star_rating columns
@@ -72,15 +72,17 @@ def main():
 		.select('text_list', 'star_rating')
 
 	#Fitting and transforming the dataset into a count vectorized form
-	cv = CountVectorizer(inputCol="text_list", outputCol="count_vec", minDF=1000)
+	#cv = CountVectorizer(inputCol="text_list", outputCol="count_vec", minDF=10000)
+	cv = CountVectorizer(inputCol="text_list", outputCol="count_vec", minDF=10000)
+	
 	cv_fit = cv.fit(text_list_df) #need to save vocabulary from this
 	cv_transform = cv_fit.transform(text_list_df)
 	output_df = cv_transform.select(cv_transform.count_vec, cv_transform.star_rating)
 
 	#Saves the vocabulary and processed dataframe to S3 in JSON format
 	vocab = spark.createDataFrame(cv_fit.vocabulary, schema=StringType())
-	vocab.coalesce(1).write.mode("overwrite").json('s3://dsi-amazon-neural/debug_vocab')
-	output_df.write.mode("overwrite").json('s3://dsi-amazon-neural/debug_data')
+	vocab.coalesce(1).write.mode("overwrite").json('s3://dsi-amazon-neural/complete_data_test')
+	output_df.write.mode("overwrite").json('s3://dsi-amazon-neural/complete_vocab_test')
 
 def good_bad_filter(x):
 	"""
