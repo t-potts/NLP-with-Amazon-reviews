@@ -166,7 +166,7 @@ def batch_generator(json_directory, num_rows):
                         if i == num_rows / 2: break  
                         
                         #selects a random row and gets the indices and values
-                        row = count_vec_list_positive[negative_shuffle_idx[i]]
+                        row = count_vec_list_negative[negative_shuffle_idx[i]]
                         indices = row['indices']
                         values = row['values']
 
