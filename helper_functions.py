@@ -112,13 +112,13 @@ def batch_generator(json_directory, num_rows):
         with open(json_directory + '/' + json_paths[path_shuffle[file_count]], 'r') as f:
             for line in f:
                 #creates separate lists for sparse vec data, and star review
-                if json.loads(line)['star_rating'] == 1:
+                if json.loads(line)['star_rating_filtered'] == 1:
                     count_vec_list_positive.append(json.loads(line)['count_vec'])
                 else:
                     count_vec_list_negative.append(json.loads(line)['count_vec'])
 
                 #Tracks how many positive/negative reviews have been seen
-                if json.loads(line)['star_rating'] == 1:
+                if json.loads(line)['star_rating_filtered'] == 1:
                     num_positive += 1
                 else:
                     num_negative += 1
@@ -157,7 +157,7 @@ def batch_generator(json_directory, num_rows):
                         dense_matrix[i, -1] = 1
 
                     #randomizes negative indexs
-                    negative_shuffle_idx = np.arange(len(count_vec_list_positive))
+                    negative_shuffle_idx = np.arange(len(count_vec_list_negative))
                     np.random.shuffle(negative_shuffle_idx)
 
                     #loops through negative reviews to create dense matrix
@@ -187,7 +187,73 @@ def batch_generator(json_directory, num_rows):
                     count_vec_list_positive = []
                     count_vec_list_negative = []
 
-                    yield dense_matrix[:, :-1], dense_matrix[:, ]
+                    yield dense_matrix[:, :-1], dense_matrix[:, -1]
+
+            #Tracks the number of files used, and reshuffles the indexes if we have used all the files in the list
+            file_count += 1
+            if file_count == len(json_paths):
+                file_count = 0
+                np.random.shuffle(path_shuffle)
+
+
+def test_creator(json_directory, num_rows):
+    """
+    Parameter: String, num_rows
+    Output: 2 Numpy arrays
+    
+    Reads jsons in path 'json_directory' that has multiple rows of dense matrix and a star rating.
+    Processes the file, creates a dense matrix.
+    Returns the dense matrix and star rating matrix
+    """
+
+    count_vec_list = []
+    star_list = []
+    json_paths = listdir(json_directory)
+    path_shuffle = np.arange(len(json_paths))
+    np.random.shuffle(path_shuffle)
+    file_count = 0
+    row_count = 0
+
+    while 1:
+        
+        vocab_size_saved = False
+        with open(json_directory + '/' + json_paths[path_shuffle[file_count]], 'r') as f:
+            for line in f:
+                #creates list of review data
+                count_vec_list.append(json.loads(line)['count_vec'])
+                star_list.append(json.loads(line)['star_rating_filtered'])
+                row_count += 1
+
+                #Saves the vocab size on the first pass
+                if not vocab_size_saved:
+                    num_matrix_columns = json.loads(line)['count_vec']['size']
+                    vocab_size_saved = True
+
+                #Stops reading lines once row_num is reached
+                if row_count == num_rows:
+                    break
+
+            #creates an empty matrix of the size to fit the read in data
+            #adds an extra column to hold positive/negative value
+            dense_matrix = np.zeros((num_rows, num_matrix_columns + 1))
+
+                #loops through positive reviews to create dense matrix
+            
+            if row_count == num_rows:
+                for i in range(len(count_vec_list)):
+                    
+                    #selects a random row and gets the indices and values
+                    row = count_vec_list[i]
+                    indices = row['indices']
+                    values = row['values']
+                    #Replaces the indices of row i in the dense_matrix with the values
+                    np.put(dense_matrix[i, :], indices, values)
+
+                    #sets last column to indicate positive
+                    dense_matrix[i, -1] = star_list[i]
+                print('reached end')
+                return dense_matrix[:, :-1], dense_matrix[:, -1]
+                    
 
             #Tracks the number of files used, and reshuffles the indexes if we have used all the files in the list
             file_count += 1

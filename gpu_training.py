@@ -9,17 +9,14 @@ from keras.models import Model, load_model
 from keras.callbacks import EarlyStopping, TensorBoard
 from keras import metrics
 import json
-from helper_functions import import_data, neuralnet_model, batch_generator, count_stars
+from helper_functions import import_data, neuralnet_model, batch_generator, count_stars, test_creator
 from sklearn.metrics import confusion_matrix
 from os import listdir
-import seaborn as sn
+
 
 
 def main():
-    for X_, y_ in batch_generator('test_data', 40000):
-        X_test = X_
-        y_test = y_
-        break
+    X_test, y_test = test_creator('test_data', 1)
     print('got training data')
     # this is our input placeholder
     input_img = Input(shape=(X_test.shape[1],))
@@ -40,8 +37,8 @@ def main():
 
     if not autoencoder_model_created:
 
-        batch_size = 700
-        nb_epoch = 30
+        batch_size = 2000
+        nb_epoch = 15
         samples_per_epoch = 20
 
         model.fit_generator(generator=batch_generator('train_data', batch_size),
@@ -52,9 +49,10 @@ def main():
         scores = model.evaluate(X_test, y_test)
         print('Test accuracy = {}'.format(scores[0]))
 
+        X_test, y_test = test_creator('test_data', 50000)
         y_predictions = model.predict(X_test)
         
-        #model.save(model_path)
+        model.save('models/first_one')
 
     else:
         pass
@@ -63,8 +61,30 @@ def main():
         print('Test mse = {}'.format(scores[0]))"""
 
 
-    print('*'*50,'y_predictions:', y_predictions[:50])
+    print('*'*50, 'positive is being predicted')
     confusions = confusion_matrix(y_test, y_predictions > 0.5)
+    true_negative = confusions[0,0]
+    false_positive = confusions[0,1]
+    false_negative = confusions[1, 0]
+    true_positive = confusions[1, 1]
+    accuracy = (true_positive + true_negative) / (true_positive + true_negative + false_negative + false_positive)
+    print('accuracy:', accuracy)
+    print('true_positive:', true_positive)
+    print('true_negatives:', true_negative)
+    print('false_positive:', false_positive)
+    print('false_negative:', false_negative)
+    
+    precision = true_positive / (true_positive + false_negative)
+    recall = true_positive / (true_positive + false_positive)
+    f1 = (2 * precision * recall) / (precision + recall)
+    print('*'*50)
+    print('accuracy: {:0.3f}'.format(accuracy))
+    print('Recall: {:0.3f}'.format(true_positive / (true_positive + false_negative)))
+    print('Precision: {:0.3f}'.format(true_positive / (true_positive + false_positive)))
+    print('f1: {:0.3f}'.format(f1))
+
+    print('*'*50, 'negative is being predicted')
+    confusions = confusion_matrix(y_test, y_predictions < 0.5)
     true_negative = confusions[0,0]
     false_positive = confusions[0,1]
     false_negative = confusions[1, 0]
