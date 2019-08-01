@@ -251,7 +251,7 @@ def test_creator(json_directory, num_rows):
 
                     #sets last column to indicate positive
                     dense_matrix[i, -1] = star_list[i]
-                print('reached end')
+                
                 return dense_matrix[:, :-1], dense_matrix[:, -1]
                     
 
@@ -260,3 +260,4 @@ def test_creator(json_directory, num_rows):
             if file_count == len(json_paths):
                 file_count = 0
                 np.random.shuffle(path_shuffle)
+                

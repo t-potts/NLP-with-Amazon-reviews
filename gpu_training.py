@@ -21,123 +21,76 @@ def main():
     # this is our input placeholder
     input_img = Input(shape=(X_test.shape[1],))
 
-    # first encoding layer
+    # first dense layer of 2000 nodes
     ll = Dense(units = 2000, activation = 'relu')(input_img)
+    # second dense layer of 150 nodes
     ll = Dense(units = 150, activation = 'relu')(ll)
-    #ll = Dense(units = 100, activation = 'relu')(ll)
-    #ll = Dense(units = 100, activation='relu')(ll)
+    # single prediction node
     prediction_layer = Dense(units = 1, activation='sigmoid', name='prediction')(ll)
-    # this model maps an input to its reconstruction
+    
     model = Model(input_img, prediction_layer)
 
-    # compile model
-    model.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics=['accuracy'])
-
+    
+    # Set to True if there is an existing model saved to 'models/trained_model'
     autoencoder_model_created = False
 
     if not autoencoder_model_created:
+        # compile model
+        model.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics=['accuracy'])
 
+        # designate batch size, number of epochs, and samples per epoch
         batch_size = 2000
         nb_epoch = 15
         samples_per_epoch = 20
 
-        model.fit_generator(generator=batch_generator('train_data', batch_size),
-                            epochs=nb_epoch,
-                            steps_per_epoch=samples_per_epoch)
+        # batch generator provides batch_size number of samples at a time to minimize RAM usage
+        model.fit_generator(
+            generator=batch_generator('train_data', batch_size),
+            epochs=nb_epoch,
+            steps_per_epoch=samples_per_epoch)
 
-
-        scores = model.evaluate(X_test, y_test)
-        print('Test accuracy = {}'.format(scores[0]))
-
+        # Creates a test set from the test_data directory and runs the test
         X_test, y_test = test_creator('test_data', 50000)
         y_predictions = model.predict(X_test)
         
-        model.save('models/first_one')
+        # Saves the trained model
+        model.save('models/trained_model')
 
     else:
-        pass
-        """model = load_model(model_path)
-        scores = model.evaluate(X_test, X_test)
-        print('Test mse = {}'.format(scores[0]))"""
+        # Loads in the trained model
+        model = load_model('models/trained_model')
+
+        # Creates a test set from the test_data directory and runs the test
+        X_test, y_test = test_creator('test_data', 50000)
+        y_predictions = model.predict(X_test)
 
 
-    print('*'*50, 'positive is being predicted')
+    
+    # Defines various statistics
     confusions = confusion_matrix(y_test, y_predictions > 0.5)
     true_negative = confusions[0,0]
     false_positive = confusions[0,1]
     false_negative = confusions[1, 0]
     true_positive = confusions[1, 1]
     accuracy = (true_positive + true_negative) / (true_positive + true_negative + false_negative + false_positive)
+    precision = true_positive / (true_positive + false_negative)
+    recall = true_positive / (true_positive + false_positive)
+    f1 = (2 * precision * recall) / (precision + recall)
+
+    # Prints out various stats based on the test predictions
+    print('*'*50, '\n', 'positive is being predicted')
     print('accuracy:', accuracy)
     print('true_positive:', true_positive)
     print('true_negatives:', true_negative)
     print('false_positive:', false_positive)
     print('false_negative:', false_negative)
     
-    precision = true_positive / (true_positive + false_negative)
-    recall = true_positive / (true_positive + false_positive)
-    f1 = (2 * precision * recall) / (precision + recall)
+
     print('*'*50)
     print('accuracy: {:0.3f}'.format(accuracy))
     print('Recall: {:0.3f}'.format(true_positive / (true_positive + false_negative)))
     print('Precision: {:0.3f}'.format(true_positive / (true_positive + false_positive)))
     print('f1: {:0.3f}'.format(f1))
-
-    print('*'*50, 'negative is being predicted')
-    confusions = confusion_matrix(y_test, y_predictions < 0.5)
-    true_negative = confusions[0,0]
-    false_positive = confusions[0,1]
-    false_negative = confusions[1, 0]
-    true_positive = confusions[1, 1]
-    accuracy = (true_positive + true_negative) / (true_positive + true_negative + false_negative + false_positive)
-    print('accuracy:', accuracy)
-    print('true_positive:', true_positive)
-    print('true_negatives:', true_negative)
-    print('false_positive:', false_positive)
-    print('false_negative:', false_negative)
-    
-    precision = true_positive / (true_positive + false_negative)
-    recall = true_positive / (true_positive + false_positive)
-    f1 = (2 * precision * recall) / (precision + recall)
-    print('*'*50)
-    print('accuracy: {:0.3f}'.format(accuracy))
-    print('Recall: {:0.3f}'.format(true_positive / (true_positive + false_negative)))
-    print('Precision: {:0.3f}'.format(true_positive / (true_positive + false_positive)))
-    print('f1: {:0.3f}'.format(f1))
-
-
-    #conf_df = pd.DataFrame([[true_positive, false_positive], [false_negative, true_negative]],                        ['predicted positive', 'predicted negative'],                        ['condition positive', 'condition negative'])
-
-
-
-
-    """    plt.figure(figsize=(15,10))
-    sn.set(font_scale=3)
-    sn.heatmap(conf_df, annot=True, annot_kws={'size': 26}, fmt='g')"""
 
 if __name__ == "__main__":
     main()
-"""
-accuracy: 0.9245
-true_positive: 4563
-true_negatives: 4682
-false_positive: 318
-false_negative: 437
-Recall: 0.91
-Precision: 0.93
-f1: 0.92
-"""
-
-"""
-latest test with above code:
-accuracy: 0.937475
-true_positive: 18639
-true_negatives: 18860
-false_positive: 1140
-false_negative: 1361
-**************************************************
-accuracy: 0.937
-Recall: 0.932
-Precision: 0.942
-f1: 0.937
-"""
