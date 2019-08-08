@@ -6,39 +6,6 @@ from keras.callbacks import EarlyStopping, TensorBoard
 from keras import metrics
 from os import listdir
 
-
-def neuralnet_model(X_train):
-    '''
-    defines autoencoder model
-    input: X_train (2D np array)
-    output: autoencoder (compiled autoencoder model)
-    '''
-    # this is our input placeholder
-    input_img = Input(shape=(X_train.shape[1],))
-
-    # first encoding layer
-    encoded1 = Dense(units = 1000, activation = 'relu', name='layer1_256')(input_img)
-
-    """    # second encoding layer
-    # note that each layer is multiplied by the layer before
-    encoded2 = Dense(units = 200, activation='relu', name='layer2_64')(encoded1)"""
-
-    # first decoding layer
-    decoded1 = Dense(units = 1000, activation='relu', name='layer3_256')(encoded1)
-
-    # second decoding layer - this produces the output
-    decoded2 = Dense(units = X_train.shape[1], activation='sigmoid', name='layer4_output')(decoded1)
-    
-    prediction_layer = Dense(units = 1, activation='sigmoid', name='prediction')(decoded2)
-    # this model maps an input to its reconstruction
-    autoencoder = Model(input_img, prediction_layer)
-
-    # compile model
-    autoencoder.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics=['accuracy'])
-
-    return autoencoder
-
-
 def import_data(json_path):
     """
     Parameter: String
